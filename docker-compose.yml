@@ -1,0 +1,18 @@
+version: '3.8'
+services:
+    ceres:
+        image: mysql:8.0.25
+        container_name: ceresdb
+        restart: always
+        environment:
+            MYSQL_DATABASE: 'ceresdb'
+            MYSQL_USER: 'dwarfmoon'
+            MYSQL_PASSWORD: 'astroidbelt'
+            MYSQL_ROOT_PASSWORD: 'twilightzone'
+        security_opt:
+            - seccomp:unconfined
+        volumes:
+            - ./mysql:/docker-entrypoint-initdb.d/:ro
+            - /opt/apps/ceresdb:/var/lib/mysql
+        ports:
+            - 3306:3306
