@@ -14,12 +14,7 @@ class Ceres:
         # Open CSV file
         try:
             loaded_records = 0
-            # the database will be opened ... you just need to create the folder .ceres in your home directory
-            # then add the file auth.nfo
-            # then add the required fields
-            # just look at the Astroibelt.py file to see what fields are required
-            # the format is {KEY}~{VALUE}
-            # using the ~ as the delimeter
+            # the database will be opened, see README
             # Open the first excel file
             # read the data in, in a loop
             # do the database required steps
