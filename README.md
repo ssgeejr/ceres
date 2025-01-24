@@ -1,6 +1,18 @@
 # ceres
 database for issue tracking
 
+You will need to create a new folder in your home directory `.ssh`
+in that, you will need the file `config` with the content added
+
+```
+Host github.com
+  StrictHostKeyChecking no
+  IdentityFile ~/.ssh/{name_of_your_github_private_ssh_key}
+```
+
+Then copy your public ssh key and send it to me
+
+
 To configure the database:
 Create a folder in your home director named `.ceres`
 in it, put the file `auth.nfo`
