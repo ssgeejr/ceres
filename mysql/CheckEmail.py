@@ -18,7 +18,7 @@ def main():
 
             #connect to MySQL db
             connection = mysql.connector.connect(
-                host='ceres',
+                host='18.117.154.172',
                 user='dwarfmoon',
                 password='astroidbelt',
                 database='ceresdb'
