@@ -34,14 +34,14 @@ def main():
             else:
                 #insert user into the 'users' table
                 cursor.execute("""
-                    INSERT INTO users (name, email, department
+                    INSERT INTO users (user_id, name, email, department
                     VALUES (%s, %s, %s)
                 """, (name, email, department))
 
                 #insert record into the 'user_reports' table with the current date
                 date_now = datetime.now().strftime('%Y-%m-%d')
                 cursor.execute("""
-                    INSERT INTO user_reports (user_email, report_date)
+                    INSERT INTO user_reports (user_email, seen_date)
                     VALUES (%s, %s)
                 """, (email, date_now))
 
