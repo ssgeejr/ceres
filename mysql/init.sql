@@ -6,7 +6,7 @@ CREATE TABLE users (
     user_id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(64) NOT NULL,
     email VARCHAR(64) UNIQUE NOT NULL,
-    department VARCHAR64255) NOT NULL
+    department VARCHAR(64) NOT NULL
 );
 
 CREATE TABLE user_reports (
