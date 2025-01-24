@@ -7,7 +7,7 @@ def main():
 
     #arguement parsing (means translating raw data into a format a computer can interpret)
     parser = argparse.ArgumentParser(description="Add a user if email doesn't exist")
-    parser.add_argument('-f', type=str, required=True, help="Path to the CSV or data file")
+    parser.add_argument('-f', '--file', type=str, required=True, help="Path to the CSV or data file")
     args = parser.parse_args()
 
     #open the file
