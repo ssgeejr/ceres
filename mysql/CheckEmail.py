@@ -34,7 +34,7 @@ def main():
             else:
                 #insert user into the 'users' table
                 cursor.execute("""
-                    INSERT INTO users (name, email, department
+                    INSERT INTO users (user_id, name, email, department
                     VALUES (%s, %s, %s)
                 """, (name, email, department))
 
