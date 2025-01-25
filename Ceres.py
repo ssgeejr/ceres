@@ -37,7 +37,7 @@ class Ceres:
             self.db_connection.close()
 
     def read_excel_and_insert_into_db(self):
-        """Read the Excel file (without headers) and insert its contents into MySQL database."""
+        """Read the Excel file (without headers) with 4 columns and insert contents into MySQL database."""
         if not self.file_path:
             print("No file provided to read.")
             return
@@ -46,11 +46,23 @@ class Ceres:
             # Load the file without headers and assign default column names
             print("Loading Excel file without headers.")
             df = pd.read_excel(self.file_path, header=None)
-            df.columns = ['Name', 'Email', 'Department']  # Assigning default column names
+
+            # Ensure that the file contains at least 4 columns
+            if df.shape[1] < 4:
+                print("Excel file must contain at least 4 columns.")
+                return
+
+            # Assign default column names (the 1st column will be ignored)
+            df.columns = ['Ignored_Column', 'Name', 'Email', 'Department']
+
+            # Display the first few rows and columns for inspection
+            print("First few rows of the Excel file:\n", df.head())
+            print("Columns detected:", df.columns.tolist())
 
             loaded_records = 0
             batch_size = 100
 
+            # Iterate through the DataFrame, skipping the first column
             for _, row in df.iterrows():
                 name, email, department = row['Name'], row['Email'], row['Department']
 
