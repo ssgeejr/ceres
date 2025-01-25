@@ -1,6 +1,9 @@
 import subprocess
+import pandas as pd
 import csv
 import mysql.connector
+import getopt
+import sys
 from datetime import datetime
 from Astroidbelt import DwarfMoon
 
@@ -8,6 +11,7 @@ class Ceres:
     def __init__(self):
         self.db_connection = None
         self.db_cursor = None
+        self.file_path = None
 
     def connect_to_db(self):
         """Establish a connection to the MySQL database."""
@@ -32,63 +36,102 @@ class Ceres:
         if self.db_connection:
             self.db_connection.close()
 
-    def read_csv_and_insert_into_db(self):
-        """Read the CSV file and insert its contents into MySQL database."""
-        # Open CSV file
+    def read_excel_and_insert_into_db(self):
+        """Read the excel file (with or without headers) and insert its contents into MySQL database."""
+        # Open Excel file
+        if not self.file_path:
+            print("No file provided to read.")
+            return
+
         try:
+            # Attempt to load the file with headers
+            try:
+                df = pd.read_excel(self.file_path)
+            except ValueError:
+                # Fall back to loading without headers and assign default column names
+                df = pd.read_excel(self.file_path, header=None)
+                df.columns = ['Name', 'Email', 'Department']
 
-            file_path = r"C:\Users\imidd\PycharmProjects\ceres\Test - Sheet1.csv"
+            # Normalize column names
+            df.columns = df.columns.str.strip().str.title()
 
-            with open(file_path, "r") as file:
-                loaded_records = 0
-                batch_size = 100
-                for line in file:
-                    name, email, department = line.strip().split(',')
+            # Validate required columns
+            expected_columns = ['Name', 'Email', 'Department']
+            if not all(col in df.columns for col in expected_columns):
+                return
 
-                    # Check if email exists
-                    self.db_cursor.execute("SELECT user_id FROM users WHERE email = %s", (email,))
-                    result = self.db_cursor.fetchone()
+            loaded_records = 0
+            batch_size = 100
 
-                    if result:
-                        print(f"User with email {email} already exists.")
-                    else:
-                        # Insert user into 'users' table
-                        self.db_cursor.execute("""
-                            INSERT INTO users (name, email, department)
-                            VALUES (%s, %s, %s)
-                        """, (name, email, department))
+            # Iterate through the DataFrame
+            for _, row in df.iterrows():
+                name, email, department = row['Name'], row['Email'], row['Department']
 
-                        # Get the user_id of the newly inserted user
-                        user_id = self.db = self.db_cursor.lastrowid
+                # Check if email exists
+                self.db_cursor.execute("SELECT user_id FROM users WHERE email = %s", (email,))
+                result = self.db_cursor.fetchone()
 
-                        # Insert into 'user_reports' table
-                        seen_date = datetime.now().strftime('%m/%d/%Y')
-                        self.db_cursor.execute("""
-                        INSERT INTO user_reports (user_id, seen_date)
-                        VALUES (%s, %s)
-                        """, (user_id, seen_date))
+                if result:
+                    print(f"User with email {email} already exists.")
+                else:
+                    # Insert user into 'users' table
+                    self.db_cursor.execute("""
+                                    INSERT INTO users (name, email, department)
+                                    VALUES (%s, %s, %s)
+                                """, (name, email, department))
 
-                        loaded_records += 1
+                    # Get the user_id of the newly inserted user
+                    user_id = self.db_cursor.lastrowid
 
-                        #commit after every batch_size records
-                        if loaded_records % batch_size == 0:
-                            self.db_connection.commit()
-                            print(f"Committed {loaded_records} records.")
+                    # Insert into 'user_reports' table
+                    seen_date = datetime.now().strftime('%m/%d/%Y')
+                    self.db_cursor.execute("""
+                                INSERT INTO user_reports (user_id, seen_date)
+                                VALUES (%s, %s)
+                                """, (user_id, seen_date))
 
-                #final commit for any remaining records
-                self.db_connection.commit()
-                print(f"Total records loaded: {loaded_records}")
+                    loaded_records += 1
+
+                    # Commit after every batch_size records
+                    if loaded_records % batch_size == 0:
+                        self.db_connection.commit()
+                        print(f"Committed {loaded_records} records.")
+
+            # Final commit for any remaining records
+            self.db_connection.commit()
+            print(f"Total records loaded: {loaded_records}")
 
         except FileNotFoundError:
-            print(f"File not found: {file_path}")
+            print(f"File not found: {self.file_path}")
         except mysql.connector.Error as err:
             print("Error inserting into database:", err)
+        except Exception as e:
+                print(f"Unexpected error: {e}")
 
     def process(self):
         """Main process for the Ceres class."""
+        self.parse_arguments(sys.argv[1:])
         self.connect_to_db()
-        self.read_csv_and_insert_into_db()
+        self.read_excel_and_insert_into_db()
         self.close_db_connection()
+
+    def parse_arguments(self, argv):
+        """Parse command-line arguments."""
+        try:
+            opts, args = getopt.getopt(argv, "d:hewmabcxf:", ["emails=", "excel"])
+        except getopt.GetoptError as e:
+            print('>>>> ERROR: %s' % str(e))
+            sys.exit(2)
+
+        for opt, arg in opts:
+            if opt == '-h':
+                print('---RUNTIME PARAMETERS---')
+                print('python script.py -f filename  # set the input filename')
+                # ... add other options
+                sys.exit()
+            elif opt == '-f':
+                self.file_path = arg  # Store the filename passed with -f
+                print(f'Using file: {self.file_path}')
 
 if __name__ == '__main__':
     ceres = Ceres()
