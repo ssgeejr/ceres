@@ -14,7 +14,7 @@ def main():
     with open(filename, "r") as file:
         # Connect to MySQL db (open the connection once, outside the loop)
         connection = mysql.connector.connect(
-            host='18.117.154.172',
+            host='ceres',
             user='dwarfmoon',
             password='astroidbelt',
             database='ceresdb'
@@ -41,7 +41,7 @@ def main():
                 user_id = cursor.lastrowid
 
                 # Insert record into the 'user_reports' table with the current date
-                date_now = datetime.now().strftime('%Y-%m-%d')
+                date_now = datetime.now().strftime('%m-%d-%Y')
                 cursor.execute("""
                     INSERT INTO user_reports (user_id, seen_date)
                     VALUES (%s, %s)
