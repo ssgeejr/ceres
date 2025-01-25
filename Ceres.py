@@ -9,25 +9,6 @@ class Ceres:
         self.db_connection = None
         self.db_cursor = None
 
-    def read_csv_and_insert_into_db(self):
-        """Read the CSV file and insert its contents into MySQL database."""
-        # Open CSV file
-        try:
-            loaded_records = 0
-            # the database will be opened, see README
-            # Open the first excel file
-            # read the data in, in a loop
-            # do the database required steps
-            # you may need to use upsert or select and validate, I'm not sure
-            # insert/upsert the record
-            # after 100 records, commit them
-            # print that you are committing 100 records
-            # after the loop is finished commit one last time to get any missed records
-            # print out the total records committed
-            print(f'Total records loaded: {loaded_records}')
-        except mysql.connector.Error as err:
-            print("Error inserting into database:", err)
-
     def connect_to_db(self):
         """Establish a connection to the MySQL database."""
         try:
@@ -51,9 +32,57 @@ class Ceres:
         if self.db_connection:
             self.db_connection.close()
 
-    def close_file(self, file):
-        """Close the file."""
-        file.close()
+    def read_csv_and_insert_into_db(self):
+        """Read the CSV file and insert its contents into MySQL database."""
+        # Open CSV file
+        try:
+
+            file_path = r"C:\Users\imidd\PycharmProjects\ceres\Test - Sheet1.csv"
+
+            with open(file_path, "r") as file:
+                loaded_records = 0
+                batch_size = 100
+                for line in file:
+                    name, email, department = line.strip().split(',')
+
+                    # Check if email exists
+                    self.db_cursor.execute("SELECT user_id FROM users WHERE email = %s", (email,))
+                    result = self.db_cursor.fetchone()
+
+                    if result:
+                        print(f"User with email {email} already exists.")
+                    else:
+                        # Insert user into 'users' table
+                        self.db_cursor.execute("""
+                            INSERT INTO users (name, email, department)
+                            VALUES (%s, %s, %s)
+                        """, (name, email, department))
+
+                        # Get the user_id of the newly inserted user
+                        user_id = self.db = self.db_cursor.lastrowid
+
+                        # Insert into 'user_reports' table
+                        seen_date = datetime.now().strftime('%m/%d/%Y')
+                        self.db_cursor.execute("""
+                        INSERT INTO user_reports (user_id, seen_date)
+                        VALUES (%s, %s)
+                        """, (user_id, seen_date))
+
+                        loaded_records += 1
+
+                        #commit after every batch_size records
+                        if loaded_records % batch_size == 0:
+                            self.db_connection.commit()
+                            print(f"Committed {loaded_records} records.")
+
+                #final commit for any remaining records
+                self.db_connection.commit()
+                print(f"Total records loaded: {loaded_records}")
+
+        except FileNotFoundError:
+            print(f"File not found: {file_path}")
+        except mysql.connector.Error as err:
+            print("Error inserting into database:", err)
 
     def process(self):
         """Main process for the Ceres class."""
