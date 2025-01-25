@@ -37,7 +37,7 @@ class Ceres:
             self.db_connection.close()
 
     def read_excel_and_insert_into_db(self):
-        """Read the Excel file (without headers) with 4 columns and insert contents into MySQL database."""
+        """Read the Excel file (without headers) with 4 columns, process data, and insert into MySQL database."""
         if not self.file_path:
             print("No file provided to read.")
             return
@@ -52,8 +52,8 @@ class Ceres:
                 print("Excel file must contain at least 4 columns.")
                 return
 
-            # Assign default column names (the 1st column will be ignored)
-            df.columns = ['Ignored_Column', 'Name', 'Email', 'Department']
+            # Assign default column names (the 1st column will be used as date, others for user details)
+            df.columns = ['Date', 'Name', 'Email', 'Department']
 
             # Display the first few rows and columns for inspection
             print("First few rows of the Excel file:\n", df.head())
@@ -62,26 +62,28 @@ class Ceres:
             loaded_records = 0
             batch_size = 100
 
-            # Iterate through the DataFrame, skipping the first column
+            # Iterate through the DataFrame, where the first column is the date
             for _, row in df.iterrows():
-                name, email, department = row['Name'], row['Email'], row['Department']
+                date, name, email, department = row['Date'], row['Name'], row['Email'], row['Department']
 
-                # Check if email exists
+                # Check if email exists in the users table
                 self.db_cursor.execute("SELECT user_id FROM users WHERE email = %s", (email,))
                 result = self.db_cursor.fetchone()
 
                 if result:
                     print(f"User with email {email} already exists.")
                 else:
-                    # Insert user into 'users' table
+                    # Insert user into 'users' table (using Name, Email, Department)
                     self.db_cursor.execute("""
                         INSERT INTO users (name, email, department)
                         VALUES (%s, %s, %s)
                     """, (name, email, department))
 
-                    # Insert into 'user_reports' table
+                    # Get the user_id of the newly inserted user
                     user_id = self.db_cursor.lastrowid
-                    seen_date = datetime.now().strftime('%m/%d/%Y')
+
+                    # Insert into 'user_reports' table using the date from the first column
+                    seen_date = date.strftime('%m/%d/%Y') if isinstance(date, datetime) else date
                     self.db_cursor.execute("""
                         INSERT INTO user_reports (user_id, seen_date)
                         VALUES (%s, %s)
@@ -89,10 +91,12 @@ class Ceres:
 
                     loaded_records += 1
 
+                    # Commit after every batch_size records
                     if loaded_records % batch_size == 0:
                         self.db_connection.commit()
                         print(f"Committed {loaded_records} records.")
 
+            # Final commit for any remaining records
             self.db_connection.commit()
             print(f"Total records loaded: {loaded_records}")
 
