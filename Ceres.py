@@ -37,33 +37,20 @@ class Ceres:
             self.db_connection.close()
 
     def read_excel_and_insert_into_db(self):
-        """Read the excel file (with or without headers) and insert its contents into MySQL database."""
-        # Open Excel file
+        """Read the Excel file (without headers) and insert its contents into MySQL database."""
         if not self.file_path:
             print("No file provided to read.")
             return
 
         try:
-            # Attempt to load the file with headers
-            try:
-                df = pd.read_excel(self.file_path)
-            except ValueError:
-                # Fall back to loading without headers and assign default column names
-                df = pd.read_excel(self.file_path, header=None)
-                df.columns = ['Name', 'Email', 'Department']
-
-            # Normalize column names
-            df.columns = df.columns.str.strip().str.title()
-
-            # Validate required columns
-            expected_columns = ['Name', 'Email', 'Department']
-            if not all(col in df.columns for col in expected_columns):
-                return
+            # Load the file without headers and assign default column names
+            print("Loading Excel file without headers.")
+            df = pd.read_excel(self.file_path, header=None)
+            df.columns = ['Name', 'Email', 'Department']  # Assigning default column names
 
             loaded_records = 0
             batch_size = 100
 
-            # Iterate through the DataFrame
             for _, row in df.iterrows():
                 name, email, department = row['Name'], row['Email'], row['Department']
 
@@ -76,28 +63,24 @@ class Ceres:
                 else:
                     # Insert user into 'users' table
                     self.db_cursor.execute("""
-                                    INSERT INTO users (name, email, department)
-                                    VALUES (%s, %s, %s)
-                                """, (name, email, department))
-
-                    # Get the user_id of the newly inserted user
-                    user_id = self.db_cursor.lastrowid
+                        INSERT INTO users (name, email, department)
+                        VALUES (%s, %s, %s)
+                    """, (name, email, department))
 
                     # Insert into 'user_reports' table
+                    user_id = self.db_cursor.lastrowid
                     seen_date = datetime.now().strftime('%m/%d/%Y')
                     self.db_cursor.execute("""
-                                INSERT INTO user_reports (user_id, seen_date)
-                                VALUES (%s, %s)
-                                """, (user_id, seen_date))
+                        INSERT INTO user_reports (user_id, seen_date)
+                        VALUES (%s, %s)
+                    """, (user_id, seen_date))
 
                     loaded_records += 1
 
-                    # Commit after every batch_size records
                     if loaded_records % batch_size == 0:
                         self.db_connection.commit()
                         print(f"Committed {loaded_records} records.")
 
-            # Final commit for any remaining records
             self.db_connection.commit()
             print(f"Total records loaded: {loaded_records}")
 
@@ -106,7 +89,7 @@ class Ceres:
         except mysql.connector.Error as err:
             print("Error inserting into database:", err)
         except Exception as e:
-                print(f"Unexpected error: {e}")
+            print(f"Unexpected error: {e}")
 
     def process(self):
         """Main process for the Ceres class."""
