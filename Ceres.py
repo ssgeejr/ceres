@@ -55,10 +55,6 @@ class Ceres:
             # Assign default column names (the 1st column will be used as date, others for user details)
             df.columns = ['Date', 'Name', 'Email', 'Department']
 
-            # Display the first few rows and columns for inspection
-            print("First few rows of the Excel file:\n", df.head())
-            print("Columns detected:", df.columns.tolist())
-
             loaded_records = 0
             batch_size = 100
 
@@ -89,6 +85,9 @@ class Ceres:
                         VALUES (%s, %s)
                     """, (user_id, seen_date))
 
+                    # Print when user_reports table is updated
+                    print(f"User report updated for user {name} ({email}) with seen_date {seen_date}")
+
                     loaded_records += 1
 
                     # Commit after every batch_size records
@@ -99,6 +98,7 @@ class Ceres:
             # Final commit for any remaining records
             self.db_connection.commit()
             print(f"Total records loaded: {loaded_records}")
+
 
         except FileNotFoundError:
             print(f"File not found: {self.file_path}")
