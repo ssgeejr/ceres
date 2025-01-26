@@ -92,10 +92,10 @@ class Ceres:
             df.columns = ['Date', 'Name', 'Email', 'Department']
 
             # Apply the parsing function to the 'Date' column
-            df['Date'] = df['Date'].apply(parse_excel_date)
+            #df['Date'] = df['Date'].apply(parse_excel_date)
 
             # Drop rows with invalid or missing dates
-            df = df.dropna(subset=['Date'])
+            #df = df.dropna(subset=['Date'])
 
             loaded_records = 0
             batch_size = 100
@@ -121,7 +121,7 @@ class Ceres:
                     user_id = self.db_cursor.lastrowid
 
                     # Insert into 'user_reports' table using the date from the first column
-                    seen_date = date if isinstance(date, str) else date.strftime('%m/%d/%Y')
+                    seen_date = int(date)
                     self.db_cursor.execute("""
                         INSERT INTO user_reports (user_id, seen_date)
                         VALUES (%s, %s)
