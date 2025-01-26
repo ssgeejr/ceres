@@ -127,8 +127,8 @@ class Ceres:
                         VALUES (%s, %s)
                     """, (user_id, seen_date))
 
-                    # Print when user_reports table is updated
-                    print(f"User report updated for user {name} ({email}) with seen_date {seen_date}")
+                    # Print a message confirming the insertion (regardless of whether it's a duplicate or new)
+                    print(f"Inserted user report for user_id {user_id} with seen_date {seen_date}")
 
                     loaded_records += 1
 
