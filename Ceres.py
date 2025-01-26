@@ -1,15 +1,12 @@
 import subprocess
 import pandas as pd
-
-print(pd.__version__)
-import csv
 import mysql.connector
 import getopt
 import sys
 from datetime import datetime, timedelta
 from Astroidbelt import DwarfMoon
 
-
+# Helper function to parse and convert Excel date formats
 def parse_excel_date(date_value):
     """Helper function to parse and convert Excel date formats."""
     if isinstance(date_value, str):
@@ -52,14 +49,29 @@ class Ceres:
 
     def connect_to_db(self):
         """Establish a connection to the MySQL database."""
-        # (Database connection code remains the same)
+        try:
+            dwarfmoon = DwarfMoon()
+
+            self.db_connection = mysql.connector.connect(
+                host=dwarfmoon.getServer(),         # Update with your MySQL server details
+                user=dwarfmoon.getUsername(),              # Update with your MySQL username
+                password=dwarfmoon.getPassword(),      # Update with your MySQL password
+                database=dwarfmoon.getDB()
+            )
+            self.db_cursor = self.db_connection.cursor()
+        except mysql.connector.Error as err:
+            print("Error connecting to MySQL:", err)
+            exit(1)
 
     def close_db_connection(self):
         """Close the database connection."""
-        # (Closing code remains the same)
+        if self.db_cursor:
+            self.db_cursor.close()
+        if self.db_connection:
+            self.db_connection.close()
 
     def read_excel_and_insert_into_db(self):
-        """Read the Excel file and insert into the database."""
+        """Read the Excel file and insert data into the database."""
         if not self.file_path:
             print("No file provided to read.")
             return
@@ -76,6 +88,7 @@ class Ceres:
                 print("Excel file must contain at least 4 columns.")
                 return
 
+            # Assign default column names (the 1st column will be used as date, others for user details)
             df.columns = ['Date', 'Name', 'Email', 'Department']
 
             # Apply the parsing function to the 'Date' column
@@ -84,10 +97,54 @@ class Ceres:
             # Drop rows with invalid or missing dates
             df = df.dropna(subset=['Date'])
 
-            # Database insertion code follows...
+            loaded_records = 0
+            batch_size = 100
+
+            # Iterate through the DataFrame, where the first column is the date
+            for _, row in df.iterrows():
+                date, name, email, department = row['Date'], row['Name'], row['Email'], row['Department']
+
+                # Check if email exists in the users table
+                self.db_cursor.execute("SELECT user_id FROM users WHERE email = %s", (email,))
+                result = self.db_cursor.fetchone()
+
+                if result:
+                    print(f"User with email {email} already exists.")
+                else:
+                    # Insert user into 'users' table (using Name, Email, Department)
+                    self.db_cursor.execute("""
+                        INSERT INTO users (name, email, department)
+                        VALUES (%s, %s, %s)
+                    """, (name, email, department))
+
+                    # Get the user_id of the newly inserted user
+                    user_id = self.db_cursor.lastrowid
+
+                    # Insert into 'user_reports' table using the date from the first column
+                    seen_date = date if isinstance(date, str) else date.strftime('%m/%d/%Y')
+                    self.db_cursor.execute("""
+                        INSERT INTO user_reports (user_id, seen_date)
+                        VALUES (%s, %s)
+                    """, (user_id, seen_date))
+
+                    # Print when user_reports table is updated
+                    print(f"User report updated for user {name} ({email}) with seen_date {seen_date}")
+
+                    loaded_records += 1
+
+                    # Commit after every batch_size records
+                    if loaded_records % batch_size == 0:
+                        self.db_connection.commit()
+                        print(f"Committed {loaded_records} records.")
+
+            # Final commit for any remaining records
+            self.db_connection.commit()
+            print(f"Total records loaded: {loaded_records}")
 
         except FileNotFoundError:
             print(f"File not found: {self.file_path}")
+        except mysql.connector.Error as err:
+            print("Error inserting into database:", err)
         except Exception as e:
             print(f"Unexpected error: {e}")
 
