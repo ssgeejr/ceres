@@ -3,6 +3,7 @@ import pandas as pd
 import mysql.connector
 import getopt
 import sys
+import logging
 from datetime import datetime, timedelta
 from Astroidbelt import DwarfMoon
 
@@ -63,12 +64,19 @@ class Ceres:
             print("Error connecting to MySQL:", err)
             exit(1)
 
-    def close_db_connection(self):
-        """Close the database connection."""
-        if self.db_cursor:
-            self.db_cursor.close()
-        if self.db_connection:
-            self.db_connection.close()
+    def insert_user_report(self, user_id, seen_date):
+        """Insert a user report entry."""
+        try:
+            self.db_cursor.execute(
+                """
+                INSERT IGNORE INTO user_reports (user_id, seen_date)
+                VALUES (%s, %s)
+                """,
+                (user_id, seen_date)
+            )
+            logging.info(f"Inserted report for user_id {user_id} on {seen_date}.")
+        except mysql.connector.Error as err:
+            logging.error(f"Error inserting report for user_id {user_id}: {err}")
 
     def read_excel_and_insert_into_db(self):
         """Read the Excel file and insert data into the database."""
@@ -91,16 +99,16 @@ class Ceres:
             # Assign default column names (the 1st column will be used as date, others for user details)
             df.columns = ['Date', 'Name', 'Email', 'Department']
 
-            # Apply the parsing function to the 'Date' column
-            #df['Date'] = df['Date'].apply(parse_excel_date)
+            # Validate and convert the date column
+            df['Date'] = df['Date'].apply(parse_excel_date)
 
             # Drop rows with invalid or missing dates
-            #df = df.dropna(subset=['Date'])
+            df = df.dropna(subset=['Date'])
 
             loaded_records = 0
             batch_size = 100
 
-            # Iterate through the DataFrame, where the first column is the date
+            # Iterate through the DataFrame
             for _, row in df.iterrows():
                 date, name, email, department = row['Date'], row['Name'], row['Email'], row['Department']
 
@@ -109,33 +117,35 @@ class Ceres:
                 result = self.db_cursor.fetchone()
 
                 if result:
-                    print(f"User with email {email} already exists.")
+                    user_id = result[0]
+                    print(f"User with email {email} already exists with user_id {user_id}.")
                 else:
-                    # Insert user into 'users' table (using Name, Email, Department)
-                    self.db_cursor.execute("""
+                    # Insert user into 'users' table
+                    self.db_cursor.execute(
+                        """
                         INSERT INTO users (name, email, department)
                         VALUES (%s, %s, %s)
-                    """, (name, email, department))
-
-                    # Get the user_id of the newly inserted user
+                        """,
+                        (name, email, department)
+                    )
                     user_id = self.db_cursor.lastrowid
+                    print(f"Inserted new user: {name} with email {email} (user_id: {user_id}).")
 
-                    # Insert into 'user_reports' table using the date from the first column
+                # Convert the date to an integer (assuming it represents a valid date)
+                try:
                     seen_date = int(date)
-                    self.db_cursor.execute("""
-                        INSERT INTO user_reports (user_id, seen_date)
-                        VALUES (%s, %s)
-                    """, (user_id, seen_date))
+                except ValueError:
+                    print(f"Invalid date for row: {row}. Skipping.")
+                    continue
 
-                    # Print a message confirming the insertion (regardless of whether it's a duplicate or new)
-                    print(f"Inserted user report for user_id {user_id} with seen_date {seen_date}")
+                # Insert into 'user_reports' table
+                self.insert_user_report(user_id, seen_date)
+                loaded_records += 1
 
-                    loaded_records += 1
-
-                    # Commit after every batch_size records
-                    if loaded_records % batch_size == 0:
-                        self.db_connection.commit()
-                        print(f"Committed {loaded_records} records.")
+                # Commit after every batch_size records
+                if loaded_records % batch_size == 0:
+                    self.db_connection.commit()
+                    print(f"Committed {loaded_records} records.")
 
             # Final commit for any remaining records
             self.db_connection.commit()
@@ -147,6 +157,13 @@ class Ceres:
             print("Error inserting into database:", err)
         except Exception as e:
             print(f"Unexpected error: {e}")
+
+    def close_db_connection(self):
+        """Close the database connection."""
+        if self.db_cursor:
+            self.db_cursor.close()
+        if self.db_connection:
+            self.db_connection.close()
 
     def process(self):
         """Main process for the Ceres class."""
