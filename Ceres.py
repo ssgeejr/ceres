@@ -100,10 +100,10 @@ class Ceres:
             df.columns = ['Date', 'Name', 'Email', 'Department']
 
             # Validate and convert the date column
-            df['Date'] = df['Date'].apply(parse_excel_date)
+            #df['Date'] = df['Date'].apply(parse_excel_date)
 
             # Drop rows with invalid or missing dates
-            df = df.dropna(subset=['Date'])
+            #df = df.dropna(subset=['Date'])
 
             loaded_records = 0
             batch_size = 100
