@@ -65,16 +65,29 @@ class Ceres:
             exit(1)
 
     def insert_user_report(self, user_id, seen_date):
-        """Insert a user report entry."""
+        """Insert a user report entry, allowing multiple seen_date entries for the same user_id."""
         try:
+            # Check if this user_id already has this specific seen_date
             self.db_cursor.execute(
                 """
-                INSERT IGNORE INTO user_reports (user_id, seen_date)
-                VALUES (%s, %s)
+                SELECT COUNT(*) FROM user_reports WHERE user_id = %s AND seen_date = %s
                 """,
                 (user_id, seen_date)
             )
-            logging.info(f"Inserted report for user_id {user_id} on {seen_date}.")
+            count = self.db_cursor.fetchone()[0]
+
+            if count == 0:
+                # If this user_id and seen_date pair doesn't exist, insert it
+                self.db_cursor.execute(
+                    """
+                    INSERT INTO user_reports (user_id, seen_date)
+                    VALUES (%s, %s)
+                    """,
+                    (user_id, seen_date)
+                )
+                logging.info(f"Inserted new report for user_id {user_id} on {seen_date}.")
+            else:
+                logging.info(f"Duplicate report found for user_id {user_id} on {seen_date}. Skipping insertion.")
         except mysql.connector.Error as err:
             logging.error(f"Error inserting report for user_id {user_id}: {err}")
 
