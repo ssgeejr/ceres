@@ -11,6 +11,8 @@ class Ceres:
         self.db_connection = None
         self.db_cursor = None
         self.file_path = None
+        self.new_records_count = 0
+        self.duplicate_records_count = 0
 
     def connect_to_db(self):
         try:
@@ -45,12 +47,14 @@ class Ceres:
 
                 if result:
                     user_id = result[0]
+                    self.duplicate_records_count += 1  # Increment duplicate counter
                 else:
                     self.db_cursor.execute(
                         "INSERT INTO users (name, email, department) VALUES (%s, %s, %s)",
                         (name, email, department)
                     )
                     user_id = self.db_cursor.lastrowid
+                    self.new_records_count += 1  # Increment new record counter
 
                 try:
                     # Ensure the date is padded to exactly 8 characters (MMDDYYYY)
@@ -58,30 +62,25 @@ class Ceres:
 
                     # If the date length is still less than 8, it is invalid and should be skipped
                     if len(seen_date) != 8:
-                        print(f"Invalid date format for row: {row}. Skipping.")
                         continue
 
                     # Convert the seen_date into MMDDYYYY format
                     seen_date_display = datetime.strptime(seen_date, "%m%d%Y").strftime("%m-%d-%Y")
 
-                    # Swap the order of the parts of the date to ensure MMDDYYYY format
-                    seen_date_mysql = seen_date  # Here, no need to convert, we already ensured it's MMDDYYYY
+                    # Using STR_TO_DATE and LPAD directly in the SQL statement
+                    self.db_cursor.execute(
+                        "INSERT INTO user_reports (user_id, seen_date) "
+                        "VALUES (%s, STR_TO_DATE(LPAD(%s, 8, '0'), '%m%d%Y'))",
+                        (user_id, seen_date)  # Pass both user_id and seen_date as parameters
+                    )
+
                 except ValueError:
-                    print(f"Invalid date for row: {row}. Skipping.")
                     continue
 
-                # Log the data to be inserted for debugging purposes
-                print(f"Inserting user_id: {user_id}, seen_date: {seen_date_display}")
-
-                # Using STR_TO_DATE and LPAD directly in the SQL statement
-                self.db_cursor.execute(
-                    "INSERT INTO user_reports (user_id, seen_date) "
-                    "VALUES (%s, STR_TO_DATE(LPAD(%s, 8, '0'), '%m%d%Y'))",
-                    (user_id, seen_date)  # Pass both user_id and seen_date as parameters
-                )
-
             self.db_connection.commit()
-            print("Data insertion completed.")
+            print(f"New records: {self.new_records_count}")
+            print(f"Duplicate records: {self.duplicate_records_count}")
+
         except Exception as e:
             print(f"Error: {e}")
 
