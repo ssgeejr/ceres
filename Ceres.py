@@ -2,7 +2,9 @@ import pandas as pd
 import mysql.connector
 import getopt
 import sys
+from datetime import datetime
 from Astroidbelt import DwarfMoon
+
 
 class Ceres:
     def __init__(self):
@@ -11,14 +13,12 @@ class Ceres:
         self.file_path = None
 
     def connect_to_db(self):
-        """Establish a connection to the MySQL database."""
         try:
             dwarfmoon = DwarfMoon()
-
             self.db_connection = mysql.connector.connect(
-                host=dwarfmoon.getServer(),         # Update with your MySQL server details
-                user=dwarfmoon.getUsername(),              # Update with your MySQL username
-                password=dwarfmoon.getPassword(),      # Update with your MySQL password
+                host=dwarfmoon.getServer(),
+                user=dwarfmoon.getUsername(),
+                password=dwarfmoon.getPassword(),
                 database=dwarfmoon.getDB()
             )
             self.db_cursor = self.db_connection.cursor()
@@ -27,134 +27,89 @@ class Ceres:
             exit(1)
 
     def read_excel_and_insert_into_db(self):
-        """Read the Excel file and insert data into the database."""
         if not self.file_path:
             print("No file provided to read.")
             return
 
         try:
-            print("Loading Excel file without headers.")
             df = pd.read_excel(self.file_path, header=None)
-
-            # Inspect the first few rows to see the data format
-            print("First few rows from Excel file:")
-            print(df.head())
-
             if df.shape[1] < 4:
                 print("Excel file must contain at least 4 columns.")
                 return
-
-            # Assign default column names (the 1st column will be used as date, others for user details)
             df.columns = ['Date', 'Name', 'Email', 'Department']
 
-            loaded_records = 0
-            batch_size = 100
-
-            # Iterate through the DataFrame
             for _, row in df.iterrows():
                 date, name, email, department = row['Date'], row['Name'], row['Email'], row['Department']
-
-                # Check if email exists in the users table
                 self.db_cursor.execute("SELECT user_id FROM users WHERE email = %s", (email,))
                 result = self.db_cursor.fetchone()
 
                 if result:
                     user_id = result[0]
-                    print(f"User with email {email} already exists with user_id {user_id}.")
                 else:
-                    # Insert user into 'users' table
                     self.db_cursor.execute(
-                        """
-                        INSERT INTO users (name, email, department)
-                        VALUES (%s, %s, %s)
-                        """,
+                        "INSERT INTO users (name, email, department) VALUES (%s, %s, %s)",
                         (name, email, department)
                     )
                     user_id = self.db_cursor.lastrowid
-                    print(f"Inserted new user: {name} with email {email} (user_id: {user_id}).")
 
-                # Convert the date to an integer (assuming it represents a valid date)
                 try:
-                    seen_date = int(date)
+                    # Ensure the date is padded to exactly 8 characters (MMDDYYYY)
+                    seen_date = str(date).zfill(8)
+
+                    # If the date length is still less than 8, it is invalid and should be skipped
+                    if len(seen_date) != 8:
+                        print(f"Invalid date format for row: {row}. Skipping.")
+                        continue
+
+                    # Convert the seen_date into MMDDYYYY format
+                    seen_date_display = datetime.strptime(seen_date, "%m%d%Y").strftime("%m-%d-%Y")
+
+                    # Swap the order of the parts of the date to ensure MMDDYYYY format
+                    seen_date_mysql = seen_date  # Here, no need to convert, we already ensured it's MMDDYYYY
                 except ValueError:
                     print(f"Invalid date for row: {row}. Skipping.")
                     continue
 
-                try:
-                    # Check if this user_id already has this specific seen_date
-                    self.db_cursor.execute(
-                        """
-                        SELECT COUNT(*) FROM user_reports WHERE user_id = %s AND seen_date = %s
-                        """,
-                        (user_id, seen_date)
-                    )
-                    count = self.db_cursor.fetchone()[0]
+                # Log the data to be inserted for debugging purposes
+                print(f"Inserting user_id: {user_id}, seen_date: {seen_date_display}")
 
-                    if count == 0:
-                        # If this user_id and seen_date pair doesn't exist, insert it
-                        self.db_cursor.execute(
-                            """
-                            INSERT INTO user_reports (user_id, seen_date)
-                            VALUES (%s, %s)
-                            """,
-                            (user_id, seen_date)
-                        )
-                        print(f"Inserted new report for user_id {user_id} on {seen_date}.")
-                    else:
-                        print(f"Duplicate report found for user_id {user_id} on {seen_date}. Skipping insertion.")
-                except mysql.connector.Error as err:
-                    print(f"Error inserting report for user_id {user_id}: {err}")
+                # Using STR_TO_DATE and LPAD directly in the SQL statement
+                self.db_cursor.execute(
+                    "INSERT INTO user_reports (user_id, seen_date) "
+                    "VALUES (%s, STR_TO_DATE(LPAD(%s, 8, '0'), '%m%d%Y'))",
+                    (user_id, seen_date)  # Pass both user_id and seen_date as parameters
+                )
 
-                loaded_records += 1
-
-                # Commit after every batch_size records
-                if loaded_records % batch_size == 0:
-                    self.db_connection.commit()
-                    print(f"Committed {loaded_records} records.")
-
-            # Final commit for any remaining records
             self.db_connection.commit()
-            print(f"Total records loaded: {loaded_records}")
-
-        except FileNotFoundError:
-            print(f"File not found: {self.file_path}")
-        except mysql.connector.Error as err:
-            print("Error inserting into database:", err)
+            print("Data insertion completed.")
         except Exception as e:
-            print(f"Unexpected error: {e}")
+            print(f"Error: {e}")
 
     def close_db_connection(self):
-        """Close the database connection."""
         if self.db_cursor:
             self.db_cursor.close()
         if self.db_connection:
             self.db_connection.close()
 
     def process(self):
-        """Main process for the Ceres class."""
         self.parse_arguments(sys.argv[1:])
         self.connect_to_db()
         self.read_excel_and_insert_into_db()
         self.close_db_connection()
 
     def parse_arguments(self, argv):
-        """Parse command-line arguments."""
         try:
-            opts, args = getopt.getopt(argv, "hf:", ["file="])  # Fixed -f option
+            opts, _ = getopt.getopt(argv, "hf:", ["file="])
         except getopt.GetoptError as e:
-            print('>>>> ERROR: %s' % str(e))
+            print(f'ERROR: {e}')
             sys.exit(2)
 
         for opt, arg in opts:
-            if opt == '-h':
-                print('---RUNTIME PARAMETERS---')
-                print('python script.py -f filename  # set the input filename')
-                sys.exit()
-            elif opt in ("-f", "--file"):
+            if opt in ("-f", "--file"):
                 self.file_path = arg
                 print(f'Using file: {self.file_path}')
 
+
 if __name__ == '__main__':
-    ceres = Ceres()
-    ceres.process()
+    Ceres().process()
 
