@@ -1,7 +1,5 @@
 import pandas as pd
-import mysql.connector
-import getopt
-import sys
+import sys, csv, getopt, mysql.connector
 from datetime import datetime
 from Astroidbelt import DwarfMoon
 
@@ -27,6 +25,43 @@ class Ceres:
         except mysql.connector.Error as err:
             print("Error connecting to MySQL:", err)
             exit(1)
+
+    def parse_csv(self):
+        try:
+            user_id = -1
+            current_date = datetime.now().date()
+            with open(self.file_path, newline='', encoding='utf-8') as file:
+                reader = csv.reader(file)
+                next(reader, None)
+                for row in reader:
+                    #selected_columns = [row[0], row[1], row[2]]  # Read columns 1, 2, 3, and 5 (0-based index)
+                    #print(selected_columns)
+                    self.db_cursor.execute("SELECT user_id FROM users WHERE email = %s", (row[1],))
+                    result = self.db_cursor.fetchone()
+
+                    if result:
+                        user_id = result[0]
+                        self.duplicate_records_count += 1  # Increment duplicate counter
+                    else:
+                        self.db_cursor.execute(
+                            "INSERT INTO users (name, email, department) VALUES (%s, %s, %s)",(row[0], row[1], row[2])
+                        )
+                        user_id = self.db_cursor.lastrowid
+                        self.new_records_count += 1  # Increment new record counter
+
+                    self.db_cursor.execute(
+                        "INSERT INTO user_reports (user_id, seen_date) "
+                        "VALUES (%s, %s)",
+                        (user_id, current_date)  # Pass both user_id and seen_date as parameters
+                    )
+
+            self.db_connection.commit()
+            print(f"New records: {self.new_records_count}")
+            print(f"Duplicate records: {self.duplicate_records_count}")
+
+        except Exception as e:
+            print(f"Error: {e}")
+
 
     def read_excel_and_insert_into_db(self):
         if not self.file_path:
@@ -92,21 +127,40 @@ class Ceres:
 
     def process(self):
         self.parse_arguments(sys.argv[1:])
-        self.connect_to_db()
-        self.read_excel_and_insert_into_db()
-        self.close_db_connection()
+        if self.parseExcel:
+            print(f'processing excel format for file {self.file_path}')
+            # self.connect_to_db()
+            # self.read_excel_and_insert_into_db()
+            # self.close_db_connection()
+        else:
+            print(f'processing csv format for file {self.file_path}')
+            self.connect_to_db()
+            self.parse_csv()
+            self.close_db_connection()
 
     def parse_arguments(self, argv):
+        self.parseExcel = False
         try:
-            opts, _ = getopt.getopt(argv, "hf:", ["file="])
+            opts, args = getopt.getopt(argv, "f:hx")
         except getopt.GetoptError as e:
-            print(f'ERROR: {e}')
+            print('>>>> ERROR: %s' % str(e))
             sys.exit(2)
-
         for opt, arg in opts:
-            if opt in ("-f", "--file"):
+            if opt == '-h':
+                print('Ceres.py -h Help Message')
+                print('Ceres.py -x Parse Excel [xlsx] file format (default is csv)')
+                print('Ceres.py -f {file}')
+                sys.exit()
+            elif opt in "-x":
+                self.parseExcel = True
+                #print('Parsing Excel format')
+            elif opt in "-f":
                 self.file_path = arg
-                print(f'Using file: {self.file_path}')
+                #print(f'Using file: {self.file_path}')
+
+        if not self.file_path:
+            print('Missing filename ...')
+            sys.exit(-1)
 
 
 if __name__ == '__main__':
